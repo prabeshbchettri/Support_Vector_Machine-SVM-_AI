@@ -1,35 +1,26 @@
-# Project 2: Support Vector Classification (SVC) — Kathmandu Valley Air Quality Index (AQI)
+# Project 2: Support Vector Classification (SVC) — Kathmandu Valley Air Quality (2022 - 2025)
 
 ## 📌 Project Overview
-This project uses **Support Vector Classification (SVC)** to classify air pollution severity levels in Kathmandu Valley according to international EPA / Nepal environmental standards based on real monitoring stations.
+This project uses **Support Vector Classification (SVC)** to classify Kathmandu Valley air quality and atmospheric pollution inversion risk into 4 environmental hazard tiers based on continuous hourly meteorological & air data from 2022 to 2025.
 
-## 📂 Dataset Information
-- **Source**: Kathmandu Valley Environmental Monitoring Network (US Embassy & Phora Durbar stations).
-- **Features**:
-  - `Raw Conc.`: PM2.5 particulate concentration ($\mu g/m^3$).
-  - `NowCast Conc.`: Dynamic weighted average concentration.
-  - `PM25_Lag1`, `PM25_Lag3`: 1-hour and 3-hour lag concentrations.
-  - `PM25_Roll6h`: 6-hour rolling average concentration.
-  - `Hour_Sin`, `Hour_Cos`: Cyclical encoding of hour of the day.
-  - `Month_Sin`, `Month_Cos`: Cyclical encoding of month of the year.
-  - `Season`: Winter, Spring, Monsoon, Post-Monsoon.
-- **Target (`AQI_Category`)**:
-  - `Good` (0 - 12 $\mu g/m^3$)
-  - `Moderate` (12.1 - 35.4 $\mu g/m^3$)
-  - `Unhealthy_Sensitive` (35.5 - 55.4 $\mu g/m^3$)
-  - `Unhealthy` (55.5 - 150.4 $\mu g/m^3$)
-  - `Hazardous` (150.5+ $\mu g/m^3$)
+- **Dataset Source**: [Kathmandu AQI Dataset 2022-2025](https://www.kaggle.com/datasets/subeshyadav/kathmandu-aqi-dataset-2022-2025) by **Subesh Yadav** on Kaggle.
 
-## 🧠 SVC Theory & Mathematical Model
-Support Vector Classifier constructs an optimal separating hyperplane that maximizes the geometric margin between classes:
+## 📂 Dataset Features
+- `Temperature_C`: Air temperature at 2m ($^\circ\text{C}$).
+- `Humidity_Pct`: Relative humidity at 2m ($\%$) - Key driver for hygroscopic smog growth.
+- `Apparent_Temp_C`: Perceived / heat index temperature.
+- `Wind_Speed_10m`: Surface wind velocity ($\text{km/h}$) - Controls valley horizontal ventilation.
+- `Wind_Speed_100m`: Upper boundary wind speed ($\text{km/h}$).
+- `Wind_Shear`: Vertical wind difference ($\text{Wind}_{100m} - \text{Wind}_{10m}$) indicating atmospheric mixing.
+- `Soil_Moisture_Surface` & `Soil_Moisture_Deep`: Ground moisture index.
+- `Hour_Sin`, `Hour_Cos`, `Month_Sin`, `Month_Cos`: Cyclical diurnal and annual time encodings.
+- `Season`: Winter, Spring, Monsoon, Post-Monsoon.
 
-$$\min_{w, b, \xi} \frac{1}{2} \|w\|^2 + C \sum_{i=1}^n \xi_i$$
-$$\text{subject to } y_i (w^T \phi(x_i) + b) \ge 1 - \xi_i, \quad \xi_i \ge 0$$
-
-- **Soft-margin penalty ($C$)**: Balances maximizing margin width and minimizing misclassification slack variables ($\xi_i$).
-- **Kernel Trick**: Projects features into high-dimensional Hilbert spaces using the Radial Basis Function:
-  $$K(x, x') = \exp(-\gamma \|x - x'\|^2)$$
-- **Multi-class Strategy**: Implemented via One-vs-Rest (OvR) and One-vs-One (OvO) hyperplanes with balanced class weighting.
+## 🎯 Target Risk Levels (`AQI_Risk_Level`)
+1. `Hazardous_Inversion`: Cold morning winter inversion with high humidity ($>75\%$) and calm winds ($\le 4\text{ km/h}$) trapping dense smog.
+2. `High_Stagnation`: Calm surface air ($\le 6\text{ km/h}$) with poor particle dispersal.
+3. `Moderate_Dispersion`: Typical valley background ventilation ($6 - 12\text{ km/h}$).
+4. `Good_Ventilation`: Active dispersion ($\ge 12\text{ km/h}$ or strong convective mixing).
 
 ## 🚀 How to Run
 
@@ -38,7 +29,7 @@ $$\text{subject to } y_i (w^T \phi(x_i) + b) \ge 1 - \xi_i, \quad \xi_i \ge 0$$
 python train_svc.py
 ```
 
-### 2. Predict Air Quality Category & Health Advisory
+### 2. Predict Risk for Custom Atmospheric Readings
 ```bash
 python predict.py
 ```
@@ -50,6 +41,6 @@ jupyter notebook kathmandu_air_quality_svc.ipynb
 
 ## 📊 Outputs
 - `plots/confusion_matrix.png`: Multi-class confusion matrix heatmap.
-- `plots/decision_boundary_2d.png`: PCA 2D non-linear decision boundaries & support vector map.
+- `plots/decision_boundary_2d.png`: PCA 2D non-linear decision boundary & support vector map.
 - `plots/kernel_comparison.png`: Accuracy & Macro F1-score comparison (Linear vs RBF vs Poly).
 - `best_svc_model.joblib`: Serialized trained pipeline.

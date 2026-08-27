@@ -1,7 +1,8 @@
 """
 ==============================================================================
 Project 2: Support Vector Classification (SVC)
-Task: Kathmandu Valley Air Quality Index (AQI) Classification
+Task: Kathmandu Valley Air Quality & Pollution Inversion Risk Classification
+Dataset: Kathmandu AQI Dataset (2022 - 2025) by Subesh Yadav
 ==============================================================================
 Author: AI Pair Programming Project
 Algorithm: Support Vector Classifier (SVC)
@@ -22,27 +23,29 @@ from sklearn.svm import SVC
 from sklearn.decomposition import PCA
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
 
-# Styling
+# Set styling
 sns.set_theme(style="whitegrid")
 plt.rcParams['font.sans-serif'] = 'DejaVu Sans'
 
 
 def load_data(data_path="data/kathmandu_air_quality.csv"):
-    """Loads the Kathmandu Air Quality dataset."""
+    """Loads the cleaned Kathmandu 2022-2025 Air Quality dataset."""
     if not os.path.exists(data_path):
         raise FileNotFoundError(f"Data file not found at {data_path}")
     
     df = pd.read_csv(data_path)
-    print(f"[+] Loaded {len(df)} air quality records from {data_path}")
+    print(f"[+] Loaded {len(df)} hourly air quality records (2022-2025) from {data_path}")
     
     num_features = [
-        'Raw Conc.', 'NowCast Conc.', 'PM25_Lag1', 'PM25_Lag3', 'PM25_Roll6h',
+        'Temperature_C', 'Humidity_Pct', 'Apparent_Temp_C',
+        'Wind_Speed_10m', 'Wind_Speed_100m', 'Wind_Shear',
+        'Soil_Moisture_Surface', 'Soil_Moisture_Deep',
         'Hour_Sin', 'Hour_Cos', 'Month_Sin', 'Month_Cos'
     ]
     cat_features = ['Season']
     
     X = df[num_features + cat_features]
-    y = df['AQI_Category'].values
+    y = df['AQI_Risk_Level'].values
     
     return X, y, num_features, cat_features
 
@@ -59,13 +62,13 @@ def build_preprocessor(num_features, cat_features):
 
 
 def train_and_compare_kernels(X_train, y_train, X_test, y_test, preprocessor):
-    """Compares Linear, RBF, and Poly kernels on air quality classification."""
+    """Compares Linear, RBF, and Poly kernels on Kathmandu air quality risk classification."""
     kernels = ['linear', 'rbf', 'poly']
     results = {}
     
-    print("\n" + "="*65)
+    print("\n" + "="*70)
     print(" 1. BASELINE KERNEL COMPARISON (SVC)")
-    print("="*65)
+    print("="*70)
     
     for kernel in kernels:
         pipeline = Pipeline([
@@ -95,9 +98,9 @@ def train_and_compare_kernels(X_train, y_train, X_test, y_test, preprocessor):
 
 def tune_best_svc(X_train, y_train, preprocessor):
     """Optimizes hyperparameters C and gamma for RBF SVC."""
-    print("\n" + "="*65)
+    print("\n" + "="*70)
     print(" 2. HYPERPARAMETER TUNING VIA GRIDSEARCHCV")
-    print("="*65)
+    print("="*70)
     
     pipeline = Pipeline([
         ('prep', preprocessor),
@@ -137,7 +140,7 @@ def generate_plots(results, best_model, X_train, y_train, X_test, y_test, prepro
         ax[0].text(i, v + 2, f"{v:.1f}%", ha='center', fontweight='bold')
         
     sns.barplot(x=kernels, y=f1_macros, hue=kernels, palette="Greens_r", legend=False, ax=ax[1])
-    ax[1].set_title("Macro F1-Score (Balances All AQI Classes)", fontsize=13, fontweight='bold')
+    ax[1].set_title("Macro F1-Score (Balances All Risk Classes)", fontsize=13, fontweight='bold')
     ax[1].set_ylabel("Macro F1-Score")
     ax[1].set_xlabel("Kernel")
     ax[1].set_ylim(0, 1.05)
@@ -152,16 +155,15 @@ def generate_plots(results, best_model, X_train, y_train, X_test, y_test, prepro
     
     # 2. Confusion Matrix Heatmap
     y_pred_best = best_model.predict(X_test)
-    labels = ['Good', 'Moderate', 'Unhealthy_Sensitive', 'Unhealthy', 'Hazardous']
-    # Filter labels present
+    labels = ['Hazardous_Inversion', 'High_Stagnation', 'Moderate_Dispersion', 'Good_Ventilation']
     unique_labels = [l for l in labels if l in np.unique(y_test)]
     cm = confusion_matrix(y_test, y_pred_best, labels=unique_labels)
     
     plt.figure(figsize=(8, 6))
     sns.heatmap(cm, annot=True, fmt='d', cmap='YlOrRd', xticklabels=unique_labels, yticklabels=unique_labels)
-    plt.title("Kathmandu AQI Classification Confusion Matrix", fontsize=13, fontweight='bold')
-    plt.xlabel("Predicted AQI Category", fontsize=11)
-    plt.ylabel("Actual AQI Category", fontsize=11)
+    plt.title("Kathmandu AQI Risk Classification Confusion Matrix (2022-2025)", fontsize=13, fontweight='bold')
+    plt.xlabel("Predicted Risk Tier", fontsize=11)
+    plt.ylabel("Actual Risk Tier", fontsize=11)
     plt.xticks(rotation=30, ha='right')
     plt.tight_layout()
     plot_path2 = os.path.join(output_dir, "confusion_matrix.png")
@@ -170,37 +172,37 @@ def generate_plots(results, best_model, X_train, y_train, X_test, y_test, prepro
     print(f"[+] Saved confusion matrix to {plot_path2}")
     
     # 3. 2D PCA Decision Boundary Visualization
-    # Transform features with preprocessor then 2D PCA
-    X_train_proc = preprocessor.fit_transform(X_train)
+    sample_indices = np.random.RandomState(42).choice(len(X_train), size=min(4000, len(X_train)), replace=False)
+    X_sample = X_train.iloc[sample_indices]
+    y_sample = y_train[sample_indices]
+    
+    X_train_proc = preprocessor.fit_transform(X_sample)
     pca = PCA(n_components=2, random_state=42)
     X_train_pca = pca.fit_transform(X_train_proc)
     
-    # Train 2D SVC for visualization
     le = LabelEncoder()
-    y_train_num = le.fit_transform(y_train)
+    y_train_num = le.fit_transform(y_sample)
     
     svc_2d = SVC(kernel='rbf', C=10.0, class_weight='balanced', random_state=42)
     svc_2d.fit(X_train_pca, y_train_num)
     
-    # Create meshgrid
     x_min, x_max = X_train_pca[:, 0].min() - 1, X_train_pca[:, 0].max() + 1
     y_min, y_max = X_train_pca[:, 1].min() - 1, X_train_pca[:, 1].max() + 1
-    xx, yy = np.meshgrid(np.linspace(x_min, x_max, 250), np.linspace(y_min, y_max, 250))
+    xx, yy = np.meshgrid(np.linspace(x_min, x_max, 200), np.linspace(y_min, y_max, 200))
     
     Z = svc_2d.predict(np.c_[xx.ravel(), yy.ravel()])
     Z = Z.reshape(xx.shape)
     
     plt.figure(figsize=(9, 7))
     plt.contourf(xx, yy, Z, alpha=0.3, cmap='Spectral')
-    scatter = plt.scatter(
+    plt.scatter(
         X_train_pca[:, 0], X_train_pca[:, 1], c=y_train_num, cmap='Spectral',
         edgecolors='k', alpha=0.6, s=25
     )
-    # Highlight support vectors
     sv = svc_2d.support_vectors_
-    plt.scatter(sv[:, 0], sv[:, 1], s=70, facecolors='none', edgecolors='black', linewidths=1.2, label=f'Support Vectors ({len(sv)})')
+    plt.scatter(sv[:, 0], sv[:, 1], s=60, facecolors='none', edgecolors='black', linewidths=1.2, label=f'Support Vectors ({len(sv)})')
     
-    plt.title("SVM Non-Linear Decision Boundaries (PCA 2D Projection)", fontsize=13, fontweight='bold')
+    plt.title("Kathmandu AQI Decision Boundaries (2022-2025 PCA Projection)", fontsize=13, fontweight='bold')
     plt.xlabel(f"Principal Component 1 ({pca.explained_variance_ratio_[0]*100:.1f}% var)", fontsize=11)
     plt.ylabel(f"Principal Component 2 ({pca.explained_variance_ratio_[1]*100:.1f}% var)", fontsize=11)
     plt.legend(loc='upper right')
@@ -212,14 +214,14 @@ def generate_plots(results, best_model, X_train, y_train, X_test, y_test, prepro
 
 
 def main():
-    print("="*65)
-    print(" SUPPORT VECTOR CLASSIFICATION (SVC) — KATHMANDU AIR QUALITY")
-    print("="*65)
+    print("="*70)
+    print(" SUPPORT VECTOR CLASSIFICATION (SVC) — KATHMANDU AQI (2022-2025)")
+    print("="*70)
     
     # 1. Load Data
     X, y, num_features, cat_features = load_data()
     
-    # 2. Train-Test Split (Stratified)
+    # 2. Train-Test Split (Stratified 80/20)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.20, random_state=42, stratify=y
     )
@@ -231,7 +233,7 @@ def main():
     # 4. Train and Compare Kernels
     results = train_and_compare_kernels(X_train, y_train, X_test, y_test, preprocessor)
     
-    # 5. Tune SVR with Grid Search
+    # 5. Tune SVC with Grid Search
     best_svc_model = tune_best_svc(X_train, y_train, preprocessor)
     
     # Final Evaluation of Tuned Model
@@ -240,9 +242,9 @@ def main():
     final_macro_f1 = f1_score(y_test, y_pred_best, average='macro')
     final_weighted_f1 = f1_score(y_test, y_pred_best, average='weighted')
     
-    print("\n" + "="*65)
+    print("\n" + "="*70)
     print(" 3. FINAL TUNED SVC TEST PERFORMANCE")
-    print("="*65)
+    print("="*70)
     print(f" Test Accuracy  : {final_acc*100:.2f}%")
     print(f" Macro F1-Score : {final_macro_f1:.4f}")
     print(f" Weighted F1    : {final_weighted_f1:.4f}")
@@ -256,7 +258,7 @@ def main():
     model_filename = "best_svc_model.joblib"
     joblib.dump(best_svc_model, model_filename)
     print(f"[+] Serialized tuned SVC pipeline to '{model_filename}'")
-    print("="*65)
+    print("="*70)
 
 
 if __name__ == "__main__":

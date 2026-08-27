@@ -60,68 +60,69 @@ def run_tests():
         print(f"    -> Predicted Price : NPR {pred_npr:,.0f} ({pred_lakhs:.2f} Lakhs / {pred_lakhs/100:.2f} Crores)")
 
     print("\n" + "="*75)
-    print(" TEST 2: KATHMANDU AIR QUALITY & HEALTH HAZARD CLASSIFICATION (SVC)")
+    print(" TEST 2: KATHMANDU AIR QUALITY & INVERSION RISK (SVC CLASSIFICATION)")
+    print(" Dataset: Kathmandu AQI Dataset (2022-2025) by Subesh Yadav")
     print("="*75)
 
     svc_model = joblib.load('02_svm_classification_nepal_air_quality/best_svc_model.joblib')
 
     aqi_test_cases = [
         {
-            'scenario': 'Monsoon Afternoon Clean Air (July, Rain washed)',
-            'Raw Conc.': 10.5, 'Month': 7, 'Hour': 14, 'Season': 'Monsoon',
-            'PM25_Lag1': 12.0, 'PM25_Lag3': 15.0, 'PM25_Roll6h': 11.8
+            'scenario': 'Severe Winter Morning Smog Inversion (January 8:00 AM)',
+            'temp_c': 8.5, 'humidity_pct': 92.0, 'apparent_temp_c': 7.0,
+            'wind_10m': 1.8, 'wind_100m': 2.5, 'soil_surf': 0.38, 'soil_deep': 0.39,
+            'hour': 8, 'month': 1, 'season': 'Winter'
         },
         {
-            'scenario': 'Spring Day Moderate Air (April Afternoon)',
-            'Raw Conc.': 32.0, 'Month': 4, 'Hour': 16, 'Season': 'Spring',
-            'PM25_Lag1': 30.0, 'PM25_Lag3': 28.0, 'PM25_Roll6h': 31.0
+            'scenario': 'High Stagnation Calm Autumn Day (November Evening)',
+            'temp_c': 17.0, 'humidity_pct': 68.0, 'apparent_temp_c': 17.0,
+            'wind_10m': 4.5, 'wind_100m': 6.0, 'soil_surf': 0.30, 'soil_deep': 0.32,
+            'hour': 19, 'month': 11, 'season': 'Post-Monsoon'
         },
         {
-            'scenario': 'Winter Morning Peak Pollution (January Smog & Inversion)',
-            'Raw Conc.': 125.0, 'Month': 1, 'Hour': 8, 'Season': 'Winter',
-            'PM25_Lag1': 130.0, 'PM25_Lag3': 110.0, 'PM25_Roll6h': 120.0
-        },
-        {
-            'scenario': 'Severe Winter Night Pollution Inversion (December Midnight)',
-            'Raw Conc.': 210.0, 'Month': 12, 'Hour': 23, 'Season': 'Winter',
-            'PM25_Lag1': 195.0, 'PM25_Lag3': 180.0, 'PM25_Roll6h': 190.0
+            'scenario': 'Active Monsoon Convective Ventilation (July Afternoon)',
+            'temp_c': 26.5, 'humidity_pct': 65.0, 'apparent_temp_c': 30.0,
+            'wind_10m': 14.0, 'wind_100m': 18.5, 'soil_surf': 0.42, 'soil_deep': 0.43,
+            'hour': 14, 'month': 7, 'season': 'Monsoon'
         }
     ]
 
     advisories = {
-        'Good': '🟢 Air quality is satisfactory. Safe for all outdoor activities.',
-        'Moderate': '🟡 Acceptable. Unusually sensitive individuals should limit prolonged exertion.',
-        'Unhealthy_Sensitive': '🟠 Sensitive groups (asthma, children, seniors) should reduce outdoor exertion.',
-        'Unhealthy': '🔴 Everyone may experience health effects. Wear N95 mask outdoors.',
-        'Hazardous': '🟣 Severe health warning! Stay indoors and keep windows closed.'
+        'Hazardous_Inversion': '🟣 CRITICAL ALERT: Strong thermal inversion trapping dense winter smog. Avoid outdoor exercise; use N95 masks.',
+        'High_Stagnation': '🔴 HIGH SMOG RISK: Low surface ventilation. Sensitive groups should stay indoors.',
+        'Moderate_Dispersion': '🟡 MODERATE DISPERSION: Typical valley ventilation. Acceptable for general public.',
+        'Good_Ventilation': '🟢 ACTIVE VENTILATION: Strong winds clearing particulates. Optimal air dispersion.'
     }
 
     for idx, case in enumerate(aqi_test_cases, 1):
-        hour = case['Hour']
-        month = case['Month']
-        raw_pm = case['Raw Conc.']
-        lag1 = case['PM25_Lag1']
+        hour = case['hour']
+        month = case['month']
+        w10 = case['wind_10m']
+        w100 = case['wind_100m']
         df_in = pd.DataFrame([{
-            'Raw Conc.': raw_pm,
-            'NowCast Conc.': 0.6 * raw_pm + 0.4 * lag1,
-            'PM25_Lag1': lag1,
-            'PM25_Lag3': case['PM25_Lag3'],
-            'PM25_Roll6h': case['PM25_Roll6h'],
+            'Temperature_C': case['temp_c'],
+            'Humidity_Pct': case['humidity_pct'],
+            'Apparent_Temp_C': case['apparent_temp_c'],
+            'Wind_Speed_10m': w10,
+            'Wind_Speed_100m': w100,
+            'Wind_Shear': w100 - w10,
+            'Soil_Moisture_Surface': case['soil_surf'],
+            'Soil_Moisture_Deep': case['soil_deep'],
             'Hour_Sin': np.sin(2 * np.pi * hour / 24.0),
             'Hour_Cos': np.cos(2 * np.pi * hour / 24.0),
             'Month_Sin': np.sin(2 * np.pi * month / 12.0),
             'Month_Cos': np.cos(2 * np.pi * month / 12.0),
-            'Season': case['Season']
+            'Season': case['season']
         }])
         pred_class = svc_model.predict(df_in)[0]
         
         print(f"\n[Test Case {idx}]: {case['scenario']}")
         print("  INPUT:")
-        print(f"    - PM2.5 Level   : {case['Raw Conc.']} µg/m³ (1h Lag: {case['PM25_Lag1']} µg/m³, 6h Avg: {case['PM25_Roll6h']} µg/m³)")
-        print(f"    - Time & Season : {case['Season']} | Month {case['Month']} | Time: {case['Hour']:02d}:00")
+        print(f"    - Atmospheric State: {case['temp_c']}°C | {case['humidity_pct']}% RH | Wind: {w10} km/h (10m) / {w100} km/h (100m)")
+        print(f"    - Time & Season    : {case['season']} | Month {month} | Time: {hour:02d}:00")
         print("  OUTPUT (SVC Model Prediction):")
-        print(f"    -> Predicted AQI Category : {pred_class}")
-        print(f"    -> Health Advisory        : {advisories.get(pred_class, '')}")
+        print(f"    -> Predicted Risk Tier : {pred_class}")
+        print(f"    -> Action & Advisory   : {advisories.get(pred_class, '')}")
 
     print("\n" + "="*75)
 
