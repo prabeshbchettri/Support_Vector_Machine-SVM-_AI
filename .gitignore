@@ -1,4 +1,4 @@
-# Python cache
+# Python bytecode and cache
 __pycache__/
 *.py[cod]
 *$py.class
@@ -6,10 +6,20 @@ __pycache__/
 # Jupyter
 .ipynb_checkpoints/
 
-# Environments
+# Virtual environments
 .venv/
 env/
 venv/
 
-# OS files
+# Testing & scratch files
+test_models.py
+run_all.py
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+scratch/
+
+# OS specific files
 .DS_Store
+Thumbs.db

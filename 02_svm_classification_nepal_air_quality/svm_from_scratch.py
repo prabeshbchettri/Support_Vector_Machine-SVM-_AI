@@ -14,6 +14,7 @@ Implemented Algorithms:
 ==============================================================================
 """
 
+import os
 import numpy as np
 import pandas as pd
 
@@ -227,7 +228,10 @@ def test_custom_svr_housing():
     print("="*75)
     
     # Load dataset
-    df = pd.read_csv('01_svm_regression_nepal_housing/data/nepal_house_data.csv')
+    housing_csv = '01_svm_regression_nepal_housing/data/nepal_house_data.csv'
+    if not os.path.exists(housing_csv):
+        housing_csv = '../01_svm_regression_nepal_housing/data/nepal_house_data.csv'
+    df = pd.read_csv(housing_csv)
     features = ['Area_SqFt', 'Bedroom', 'Bathroom', 'Floors', 'Parking', 'Road_Width_Ft']
     
     X = df[features].values
@@ -269,7 +273,10 @@ def test_custom_svc_air_quality():
     print(" 2. CUSTOM SVC ALGORITHM FROM SCRATCH — KATHMANDU AQI CLASSIFICATION")
     print("="*75)
     
-    df = pd.read_csv('02_svm_classification_nepal_air_quality/data/kathmandu_air_quality.csv')
+    aqi_csv = '02_svm_classification_nepal_air_quality/data/kathmandu_air_quality.csv'
+    if not os.path.exists(aqi_csv):
+        aqi_csv = 'data/kathmandu_air_quality.csv'
+    df = pd.read_csv(aqi_csv)
     num_features = [
         'Temperature_C', 'Humidity_Pct', 'Apparent_Temp_C',
         'Wind_Speed_10m', 'Wind_Speed_100m', 'Wind_Shear',
