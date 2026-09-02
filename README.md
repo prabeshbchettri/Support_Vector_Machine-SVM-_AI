@@ -68,6 +68,11 @@ python svm_from_scratch.py    # Run pure NumPy from-scratch SVM implementation
 python predict.py             # Run sample AQI category prediction
 ```
 
+### 4. Interactive Streamlit Visualizer & Live Tester
+```bash
+streamlit run app_streamlit.py
+```
+
 ---
 
 ## 🔬 Project Summaries & Performance
