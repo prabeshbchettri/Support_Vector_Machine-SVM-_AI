@@ -15,6 +15,7 @@ import joblib
 import plotly.express as px
 import plotly.graph_objects as go
 from sklearn.decomposition import PCA
+from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
 
@@ -112,7 +113,7 @@ st.caption("Support Vector Machine (SVM) Classification & Meteorological Modelin
 # Main Tabs
 tab_pred, tab_vis, tab_live, tab_batch = st.tabs([
     "🎯 Model Prediction & Testing",
-    "📊 Model Visualizations",
+    "📊 Model Visualizations & Hyperplane",
     "🌐 Live Internet Data (Kathmandu)",
     "📂 Batch CSV Evaluation"
 ])
@@ -235,23 +236,283 @@ with tab_pred:
 
 
 # ==============================================================================
-# TAB 2: MODEL VISUALIZATIONS
+# TAB 2: MODEL VISUALIZATIONS & HYPERPLANE
 # ==============================================================================
 with tab_vis:
-    st.subheader("Model & Data Visualizations")
+    st.subheader("SVM Model Visualizations & Hyperplane Geometry")
 
     vis_type = st.radio(
         "Select Visualization:",
         [
-            "1. Kernel Comparison (Linear vs Poly vs RBF)",
-            "2. Confusion Matrix Heatmap",
-            "3. 2D PCA Decision Boundary & Feature Projection",
-            "4. Meteorological Distribution by Risk Class"
+            "📐 2D SVM Optimal Hyperplane & Support Vectors",
+            "🧊 3D Decision Function Surface",
+            "🎯 Multi-Class Confusion Matrix Heatmap",
+            "🔬 Kernel Performance Benchmark (Linear vs Poly vs RBF)",
+            "🌐 2D PCA Space Projection",
+            "📈 Feature Distributions by Risk Class"
         ],
         horizontal=True
     )
 
-    if vis_type == "1. Kernel Comparison (Linear vs Poly vs RBF)":
+    if vis_type == "📐 2D SVM Optimal Hyperplane & Support Vectors":
+        st.markdown("#### Interactive 2D SVM Hyperplane, Margins & Support Vectors")
+        st.write("Fit and inspect the decision boundary, separation margins, and support vectors for any feature pair.")
+
+        if df_raw is not None:
+            c_f1, c_f2, c_k, c_c = st.columns(4)
+            feature_choices = ['Humidity_Pct', 'Wind_Speed_10m', 'Temperature_C', 'Wind_Speed_100m', 'Soil_Moisture_Surface']
+            
+            with c_f1:
+                feat_x = st.selectbox("X-Axis Feature", feature_choices, index=0)
+            with c_f2:
+                feat_y = st.selectbox("Y-Axis Feature", feature_choices, index=1)
+            with c_k:
+                kernel_choice = st.selectbox("SVM Kernel", ['rbf', 'linear', 'poly'], index=0)
+            with c_c:
+                c_param = st.slider("Penalty Parameter (C)", 0.1, 50.0, 10.0, 0.5)
+
+            mode = st.radio("Display Mode:", ["Multi-Class Decision Regions", "Binary Hyperplane & Margins (Hazardous Inversion vs Others)"], horizontal=True)
+
+            sample_data = df_raw.sample(min(1200, len(df_raw)), random_state=42).copy()
+            X_2d = sample_data[[feat_x, feat_y]].values
+            
+            scaler_2d = StandardScaler()
+            X_2d_scaled = scaler_2d.fit_transform(X_2d)
+
+            if mode.startswith("Binary"):
+                y_target = (sample_data['AQI_Risk_Level'] == 'Hazardous_Inversion').astype(int).values
+                target_names = ['Other Classes', 'Hazardous Inversion']
+                colors_bin = ['#0284c7', '#dc2626']
+                
+                clf_2d = SVC(kernel=kernel_choice, C=c_param, gamma='scale')
+                clf_2d.fit(X_2d_scaled, y_target)
+
+                # Meshgrid
+                x_min, x_max = X_2d[:, 0].min() - 2, X_2d[:, 0].max() + 2
+                y_min, y_max = X_2d[:, 1].min() - 0.5, X_2d[:, 1].max() + 0.5
+                xx, yy = np.meshgrid(np.linspace(x_min, x_max, 150), np.linspace(y_min, y_max, 150))
+                grid_scaled = scaler_2d.transform(np.c_[xx.ravel(), yy.ravel()])
+                Z_decision = clf_2d.decision_function(grid_scaled).reshape(xx.shape)
+
+                # Support vectors back to original coordinates
+                sv_orig = scaler_2d.inverse_transform(clf_2d.support_vectors_)
+
+                fig_hp = go.Figure()
+
+                # Decision contour (f(x)=0 is hyperplane, f(x)=+1 / -1 are margins)
+                fig_hp.add_trace(go.Contour(
+                    x=np.linspace(x_min, x_max, 150),
+                    y=np.linspace(y_min, y_max, 150),
+                    z=Z_decision,
+                    showscale=True,
+                    colorscale='RdBu_r',
+                    contours=dict(
+                        start=-2, end=2, size=1,
+                        coloring='heatmap'
+                    ),
+                    opacity=0.4,
+                    hoverinfo='skip',
+                    name='Decision Margin'
+                ))
+
+                # Hyperplane line contour f(x) = 0
+                fig_hp.add_trace(go.Contour(
+                    x=np.linspace(x_min, x_max, 150),
+                    y=np.linspace(y_min, y_max, 150),
+                    z=Z_decision,
+                    contours_type="constraint",
+                    contours_operation="=",
+                    contours_value=0.0,
+                    line=dict(color='white', width=3, dash='solid'),
+                    name='Optimal Hyperplane (f(x)=0)',
+                    showlegend=True
+                ))
+
+                # Positive & Negative Margins f(x)=+1 and f(x)=-1
+                fig_hp.add_trace(go.Contour(
+                    x=np.linspace(x_min, x_max, 150),
+                    y=np.linspace(y_min, y_max, 150),
+                    z=Z_decision,
+                    contours_type="constraint",
+                    contours_operation="=",
+                    contours_value=1.0,
+                    line=dict(color='yellow', width=2, dash='dash'),
+                    name='Upper Margin (f(x)=+1)',
+                    showlegend=True
+                ))
+                fig_hp.add_trace(go.Contour(
+                    x=np.linspace(x_min, x_max, 150),
+                    y=np.linspace(y_min, y_max, 150),
+                    z=Z_decision,
+                    contours_type="constraint",
+                    contours_operation="=",
+                    contours_value=-1.0,
+                    line=dict(color='cyan', width=2, dash='dash'),
+                    name='Lower Margin (f(x)=-1)',
+                    showlegend=True
+                ))
+
+                # Data Points
+                for label_val, name, color in zip([0, 1], target_names, colors_bin):
+                    mask = (y_target == label_val)
+                    fig_hp.add_trace(go.Scatter(
+                        x=X_2d[mask, 0],
+                        y=X_2d[mask, 1],
+                        mode='markers',
+                        name=name,
+                        marker=dict(size=6, color=color, opacity=0.8)
+                    ))
+
+                # Support Vectors (Encircled)
+                fig_hp.add_trace(go.Scatter(
+                    x=sv_orig[:, 0],
+                    y=sv_orig[:, 1],
+                    mode='markers',
+                    name=f'Support Vectors ({len(sv_orig)})',
+                    marker=dict(size=11, color='rgba(0,0,0,0)', line=dict(color='black', width=2))
+                ))
+
+                fig_hp.update_layout(
+                    title=f"SVM Decision Boundary & Margins ({feat_x} vs {feat_y}) — Kernel: {kernel_choice.upper()}, C={c_param}",
+                    xaxis=dict(title=feat_x),
+                    yaxis=dict(title=feat_y),
+                    height=520,
+                    margin=dict(l=0, r=0, t=40, b=0)
+                )
+                st.plotly_chart(fig_hp, use_container_width=True)
+
+                st.info(f"**Hyperplane Statistics**: Fitted **{len(sv_orig)} Support Vectors** out of {len(sample_data)} samples ({(len(sv_orig)/len(sample_data))*100:.1f}% ratio). The solid white line represents the optimal separating hyperplane ($w^T \phi(x) + b = 0$).")
+
+            else:
+                # Multi-class regions
+                class_labels = list(sample_data['AQI_Risk_Level'].unique())
+                y_target = sample_data['AQI_Risk_Level'].astype('category').cat.codes.values
+                code_to_name = dict(enumerate(sample_data['AQI_Risk_Level'].astype('category').cat.categories))
+
+                clf_2d = SVC(kernel=kernel_choice, C=c_param, gamma='scale')
+                clf_2d.fit(X_2d_scaled, y_target)
+
+                x_min, x_max = X_2d[:, 0].min() - 2, X_2d[:, 0].max() + 2
+                y_min, y_max = X_2d[:, 1].min() - 0.5, X_2d[:, 1].max() + 0.5
+                xx, yy = np.meshgrid(np.linspace(x_min, x_max, 120), np.linspace(y_min, y_max, 120))
+                grid_scaled = scaler_2d.transform(np.c_[xx.ravel(), yy.ravel()])
+                Z_pred = clf_2d.predict(grid_scaled).reshape(xx.shape)
+                sv_orig = scaler_2d.inverse_transform(clf_2d.support_vectors_)
+
+                fig_hp = go.Figure()
+
+                # Heatmap background for multi-class regions
+                fig_hp.add_trace(go.Heatmap(
+                    x=np.linspace(x_min, x_max, 120),
+                    y=np.linspace(y_min, y_max, 120),
+                    z=Z_pred,
+                    showscale=False,
+                    colorscale=[[0, 'rgba(220,38,38,0.25)'], [0.33, 'rgba(234,88,12,0.25)'], [0.66, 'rgba(202,138,4,0.25)'], [1.0, 'rgba(22,163,74,0.25)']],
+                    hoverinfo='skip'
+                ))
+
+                # Scatter points per class
+                for code, name in code_to_name.items():
+                    mask = (y_target == code)
+                    fig_hp.add_trace(go.Scatter(
+                        x=X_2d[mask, 0],
+                        y=X_2d[mask, 1],
+                        mode='markers',
+                        name=name.replace('_', ' '),
+                        marker=dict(size=6, color=RISK_COLORS.get(name, '#0284c7'), opacity=0.8)
+                    ))
+
+                # Support Vectors
+                fig_hp.add_trace(go.Scatter(
+                    x=sv_orig[:, 0],
+                    y=sv_orig[:, 1],
+                    mode='markers',
+                    name=f'Support Vectors ({len(sv_orig)})',
+                    marker=dict(size=10, color='rgba(0,0,0,0)', line=dict(color='black', width=1.5))
+                ))
+
+                fig_hp.update_layout(
+                    title=f"Multi-Class SVM Decision Regions ({feat_x} vs {feat_y}) — Support Vectors: {len(sv_orig)}",
+                    xaxis=dict(title=feat_x),
+                    yaxis=dict(title=feat_y),
+                    height=520,
+                    margin=dict(l=0, r=0, t=40, b=0)
+                )
+                st.plotly_chart(fig_hp, use_container_width=True)
+
+    elif vis_type == "🧊 3D Decision Function Surface":
+        st.markdown("#### 3D SVM Decision Function Surface & Separation Plane")
+        st.write("Visualize the non-linear decision function $f(x, y)$ in 3D space with the $z=0$ hyperplane plane.")
+
+        if df_raw is not None:
+            sample_data = df_raw.sample(min(800, len(df_raw)), random_state=42).copy()
+            X_2d = sample_data[['Humidity_Pct', 'Wind_Speed_10m']].values
+            y_bin = (sample_data['AQI_Risk_Level'] == 'Hazardous_Inversion').astype(int).values
+
+            scaler = StandardScaler()
+            X_s = scaler.fit_transform(X_2d)
+            clf = SVC(kernel='rbf', C=10.0, gamma='scale')
+            clf.fit(X_s, y_bin)
+
+            x_min, x_max = X_2d[:, 0].min(), X_2d[:, 0].max()
+            y_min, y_max = X_2d[:, 1].min(), X_2d[:, 1].max()
+            xx, yy = np.meshgrid(np.linspace(x_min, x_max, 50), np.linspace(y_min, y_max, 50))
+            grid_s = scaler.transform(np.c_[xx.ravel(), yy.ravel()])
+            zz = clf.decision_function(grid_s).reshape(xx.shape)
+
+            fig_3d = go.Figure()
+
+            # 3D Decision Surface
+            fig_3d.add_trace(go.Surface(
+                x=xx, y=yy, z=zz,
+                colorscale='Viridis',
+                opacity=0.8,
+                name='Decision Surface f(x)'
+            ))
+
+            # Zero Hyperplane Surface z=0
+            zero_plane = np.zeros_like(zz)
+            fig_3d.add_trace(go.Surface(
+                x=xx, y=yy, z=zero_plane,
+                colorscale=[[0, 'rgba(239,68,68,0.4)'], [1, 'rgba(239,68,68,0.4)']],
+                showscale=False,
+                name='Zero Hyperplane (z=0)'
+            ))
+
+            fig_3d.update_layout(
+                title="3D Support Vector Decision Surface f(Humidity, Wind)",
+                scene=dict(
+                    xaxis_title="Relative Humidity (%)",
+                    yaxis_title="Wind Speed 10m (km/h)",
+                    zaxis_title="Decision Function f(x)"
+                ),
+                height=550,
+                margin=dict(l=0, r=0, t=40, b=0)
+            )
+            st.plotly_chart(fig_3d, use_container_width=True)
+
+    elif vis_type == "🎯 Multi-Class Confusion Matrix Heatmap":
+        st.markdown("#### Multi-Class Test Confusion Matrix")
+        classes = ['Hazardous_Inversion', 'High_Stagnation', 'Moderate_Dispersion', 'Good_Ventilation']
+        cm_data = np.array([
+            [543, 2, 0, 0],
+            [123, 3083, 11, 0],
+            [0, 1, 705, 0],
+            [0, 0, 0, 30]
+        ])
+
+        fig_cm = px.imshow(
+            cm_data,
+            x=[c.replace('_', ' ') for c in classes],
+            y=[c.replace('_', ' ') for c in classes],
+            color_continuous_scale='Blues',
+            text_auto=True,
+            labels=dict(x="Predicted Risk Class", y="Actual Risk Class", color="Count")
+        )
+        fig_cm.update_layout(height=420, margin=dict(l=0, r=0, t=30, b=0))
+        st.plotly_chart(fig_cm, use_container_width=True)
+
+    elif vis_type == "🔬 Kernel Performance Benchmark (Linear vs Poly vs RBF)":
         st.markdown("#### Performance Across Different SVM Kernels")
         comp_df = pd.DataFrame({
             'Kernel': ['Linear SVC', 'Polynomial (deg=3)', 'Standard RBF', 'Physics-Aware Calibrated RBF'],
@@ -277,28 +538,7 @@ with tab_vis:
             fig_k.update_traces(texttemplate='%{text:.2f}%', textposition='outside')
             st.plotly_chart(fig_k, use_container_width=True)
 
-    elif vis_type == "2. Confusion Matrix Heatmap":
-        st.markdown("#### Multi-Class Test Confusion Matrix")
-        classes = ['Hazardous_Inversion', 'High_Stagnation', 'Moderate_Dispersion', 'Good_Ventilation']
-        cm_data = np.array([
-            [543, 2, 0, 0],
-            [123, 3083, 11, 0],
-            [0, 1, 705, 0],
-            [0, 0, 0, 30]
-        ])
-
-        fig_cm = px.imshow(
-            cm_data,
-            x=[c.replace('_', ' ') for c in classes],
-            y=[c.replace('_', ' ') for c in classes],
-            color_continuous_scale='Blues',
-            text_auto=True,
-            labels=dict(x="Predicted Risk Class", y="Actual Risk Class", color="Count")
-        )
-        fig_cm.update_layout(height=420, margin=dict(l=0, r=0, t=30, b=0))
-        st.plotly_chart(fig_cm, use_container_width=True)
-
-    elif vis_type == "3. 2D PCA Decision Boundary & Feature Projection":
+    elif vis_type == "🌐 2D PCA Space Projection":
         st.markdown("#### 2D Principal Component Space & Risk Clusters")
         if df_raw is not None:
             sample = df_raw.sample(min(2500, len(df_raw)), random_state=42).copy()
@@ -321,7 +561,7 @@ with tab_vis:
             fig_pca.update_layout(height=450, margin=dict(l=0, r=0, t=40, b=0))
             st.plotly_chart(fig_pca, use_container_width=True)
 
-    elif vis_type == "4. Meteorological Distribution by Risk Class":
+    elif vis_type == "📈 Feature Distributions by Risk Class":
         st.markdown("#### Feature Distributions by Risk Level")
         if df_raw is not None:
             c1, c2 = st.columns(2)
